@@ -78,11 +78,6 @@
             background-color: #555;
         }
 
-        /* Optional: Adjust text shadow for better contrast on dark background */
-        #search-button:hover {
-            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.4);
-        }
-
         .blink {
             animation: blink-animation 1s steps(5, start) infinite;
             -webkit-animation: blink-animation 1s steps(5, start) infinite;
@@ -98,16 +93,29 @@
 
         /* Style for area code list in the sidebar */
         .area-code {
+            display: flex;
+            align-items: center;
             margin-bottom: 10px;
             padding: 10px;
             background-color: #222;
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.3s;
+            font-size: 10px;
         }
 
         .area-code:hover {
             background-color: #444;
+        }
+
+        .modified-area {
+            background-color: #880;
+        }
+
+        .usa-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 5px;
         }
     </style>
 </head>
@@ -153,6 +161,7 @@
         }).addTo(map);
 
         var drawnRectangles = [];
+        var allAreaCodes = []; // Array to store all area codes
 
         // Function to fetch and display all rectangles from DynamoDB on page load
         function fetchAndDisplayRectangles() {
@@ -167,6 +176,11 @@
                 }
 
                 console.log('Fetched items:', data.Items); // Log fetched items to console
+
+                // Sort items by timestamp in descending order
+                data.Items.sort(function(a, b) {
+                    return new Date(b.timestamp) - new Date(a.timestamp);
+                });
 
                 data.Items.forEach(function(item) {
                     var boundsArray = item.bounds.split(',');
@@ -184,9 +198,12 @@
                     // Add to drawnRectangles array
                     drawnRectangles.push({ rectangle: rectangle, areanft: areanft });
 
-                    // Add area code to sidebar
-                    addAreaCodeToSidebar(areanft);
+                    // Add area code to allAreaCodes array
+                    allAreaCodes.push({ areanft: areanft, bounds: bounds, timestamp: new Date(item.timestamp) });
                 });
+
+                // Load the first 50 area codes initially
+                loadMoreAreaCodes(50);
             });
         }
 
@@ -205,9 +222,9 @@
                 // Generate a random areanft (32 characters)
                 var areanft = generateRandomID();
 
-                // Calculate width and height for an area of approximately 1000m²
-                var widthMeters = Math.sqrt(1000);
-                var heightMeters = 1000 / widthMeters;
+                // Calculate width and height for an area of approximately 500m²
+                var widthMeters = Math.sqrt(500);
+                var heightMeters = 500 / widthMeters;
 
                 // Convert meters to degrees (approximation)
                 var widthDegrees = widthMeters / (111320 * Math.cos(center.lat * Math.PI / 180));
@@ -234,13 +251,17 @@
                 // Add to the beginning of the list of drawn rectangles
                 drawnRectangles.unshift({ rectangle: rectangle, areanft: areanft });
 
-                // Save areanft to DynamoDB
-                saveareanftToDynamoDB(areanft, bounds, color);
+                // Save the area code to DynamoDB
+                saveAreaCodeToDynamoDB(areanft, bounds, color);
 
-                // Add area code to sidebar
-                addAreaCodeToSidebar(areanft);
+                // Add the area code to the sidebar
+                addAreaCodeToSidebar(areanft, bounds, new Date());
+
+                // Fit map to bounds of the new rectangle
+                map.fitBounds(bounds);
+            } else {
+                alert('The new rectangle overlaps with an existing one. Please choose another location.');
             }
-            // No need for else block here, as we don't show an alert
         });
 
         function generateRandomID() {
@@ -253,11 +274,11 @@
             return randomID;
         }
 
-        function saveareanftToDynamoDB(areanft, bounds, color) {
+        function saveAreaCodeToDynamoDB(areanft, bounds, color) {
             var params = {
-                TableName: 'solfan',
+                TableName: tableName,
                 Item: {
-                    solfan: areanft, // Ensure solfan is your primary key attribute
+                    solfan: areanft,
                     bounds: bounds.toBBoxString(),
                     color: color,
                     timestamp: new Date().toISOString()
@@ -284,55 +305,23 @@
         });
 
         function searchRectangle(areanft) {
-    // Define additional details for specific area codes
-    var areaCodeDetails = {
-        '5i4hXOAVzqUBScsSngBTpRWnLjZI6UAO': {
-            business: 'Example Business Name 1',
-            money: '$1,000,000'
-        },
-        'z5Iz1ZLgcho6zVJUGlr37lL5mywoHcZT': {
-            business: 'Example Business Name 2',
-            money: '$500,000'
-        }
-        // Add more area codes and their details as needed
-    };
+            var searchedRectangle = drawnRectangles.find(function(rectangle) {
+                return rectangle.areanft === areanft;
+            });
 
-    // Check if a rectangle with the specified areanft exists locally
-    var searchedRectangle = drawnRectangles.find(function(rectangle) {
-        return rectangle.areanft === areanft;
-    });
-
-    if (searchedRectangle) {
-        // Check if the searched area code has additional details defined
-        if (areaCodeDetails.hasOwnProperty(areanft)) {
-            var details = areaCodeDetails[areanft];
-
-            // Display more details in the popup
-            var popupContent = 'Area Code: ' + searchedRectangle.areanft + '<br>' +
-                               'Business: ' + details.business + '<br>' +
-                               'Money: ' + details.money;
-
-            searchedRectangle.rectangle.bindPopup(popupContent);
-        } else {
-            // Standard popup without additional details
-            searchedRectangle.rectangle.bindPopup('Area Code: ' + searchedRectangle.areanft);
+            if (searchedRectangle) {
+                map.fitBounds(searchedRectangle.rectangle.getBounds());
+                searchedRectangle.rectangle.openPopup();
+            } else {
+                retrieveAreaCodeFromDynamoDB(areanft);
+            }
         }
 
-        map.fitBounds(searchedRectangle.rectangle.getBounds());
-        searchedRectangle.rectangle.openPopup();
-    } else {
-        // If not found locally, retrieve from DynamoDB
-        retrieveareanftFromDynamoDB(areanft);
-    }
-}
-
-
-
-        function retrieveareanftFromDynamoDB(areanft) {
+        function retrieveAreaCodeFromDynamoDB(areanft) {
             var params = {
-                TableName: 'solfan',
+                TableName: tableName,
                 Key: {
-                    solfan: areanft // Ensure this matches your DynamoDB table primary key
+                    solfan: areanft
                 }
             };
 
@@ -341,30 +330,21 @@
                     console.error('Error retrieving data from DynamoDB:', err);
                     alert('Error retrieving rectangle with the specified areanft: ' + err.message);
                 } else {
-                    console.log('Retrieved data from DynamoDB:', data); // Log retrieved data
+                    console.log('Retrieved data from DynamoDB:', data);
 
                     if (data.Item) {
-                        // Process retrieved item
                         var boundsArray = data.Item.bounds.split(',');
                         var bounds = L.latLngBounds(
                             [parseFloat(boundsArray[1]), parseFloat(boundsArray[0])],
                             [parseFloat(boundsArray[3]), parseFloat(boundsArray[2])]
                         );
                         var color = data.Item.color;
-
-                        // Create rectangle on map
                         var rectangle = L.rectangle(bounds, { color: color, fillOpacity: 0.5 }).addTo(map);
                         rectangle.bindPopup('Area Code: ' + areanft);
-
-                        // Add to drawnRectangles array
                         drawnRectangles.push({ rectangle: rectangle, areanft: areanft });
-
-                        // Fit map to rectangle bounds and open popup
                         map.fitBounds(bounds);
                         rectangle.openPopup();
-
-                        // Add area code to sidebar
-                        addAreaCodeToSidebar(areanft);
+                        addAreaCodeToSidebar(areanft, bounds, new Date(data.Item.timestamp));
                     } else {
                         alert('Rectangle with the specified areanft not found.');
                     }
@@ -372,20 +352,79 @@
             });
         }
 
-        function addAreaCodeToSidebar(areanft) {
-    var areaCodeList = document.getElementById('area-code-list');
-    var areaCodeElement = document.createElement('div');
-    areaCodeElement.textContent = areanft;
-    areaCodeElement.classList.add('area-code');
-    areaCodeElement.addEventListener('click', function() {
-        searchRectangle(areanft);
-    });
+        function addAreaCodeToSidebar(areanft, bounds, timestamp) {
+            var areaCodeList = document.getElementById('area-code-list');
+            var areaCodeElement = document.createElement('div');
+            areaCodeElement.textContent = areanft;
+            areaCodeElement.classList.add('area-code');
 
-    // Insert new area code element at the beginning of the list
-    areaCodeList.insertBefore(areaCodeElement, areaCodeList.firstChild);
-}
+            if (areanft === '5i4hXOAVzqUBScsSngBTpRWnLjZI6UAO') {
+                areaCodeElement.classList.add('modified-area');
+            }
 
+            if (isRectangleInUSA(bounds)) {
+                var usaIcon = document.createElement('img');
+                usaIcon.src = 'https://i.ibb.co/fXRX4Xx/united-states-1.png';
+                usaIcon.classList.add('usa-icon');
+                areaCodeElement.insertBefore(usaIcon, areaCodeElement.firstChild);
+            }
 
+            areaCodeElement.addEventListener('click', function() {
+                searchRectangle(areanft); // Use 'areanft' from the outer scope
+            });
+
+            areaCodeElement.setAttribute('data-timestamp', timestamp.toISOString());
+            areaCodeList.insertBefore(areaCodeElement, areaCodeList.firstChild);
+        }
+
+        function isRectangleInUSA(bounds) {
+            var usaBounds = L.latLngBounds(
+                [24.396308, -125.0],
+                [49.384358, -66.93457]
+            );
+            return usaBounds.intersects(bounds);
+        }
+
+        var loadedAreaCodes = 0;
+
+        function loadMoreAreaCodes(count) {
+            var areaCodeList = document.getElementById('area-code-list');
+            for (var i = loadedAreaCodes; i < loadedAreaCodes + count && i < allAreaCodes.length; i++) {
+                var areaCode = allAreaCodes[i];
+                var areaCodeElement = document.createElement('div');
+                areaCodeElement.textContent = areaCode.areanft;
+                areaCodeElement.classList.add('area-code');
+
+                if (areaCode.areanft === '5i4hXOAVzqUBScsSngBTpRWnLjZI6UAO') {
+                    areaCodeElement.classList.add('modified-area');
+                }
+
+                if (isRectangleInUSA(areaCode.bounds)) {
+                    var usaIcon = document.createElement('img');
+                    usaIcon.src = 'https://i.ibb.co/fXRX4Xx/united-states-1.png';
+                    usaIcon.classList.add('usa-icon');
+                    areaCodeElement.insertBefore(usaIcon, areaCodeElement.firstChild);
+                }
+
+                // Add event listener to the area code element
+                (function(areanft) {
+                    areaCodeElement.addEventListener('click', function() {
+                        searchRectangle(areanft);
+                    });
+                })(areaCode.areanft); // Immediately invoke the function with 'areaCode.areanft'
+
+                areaCodeElement.setAttribute('data-timestamp', areaCode.timestamp.toISOString());
+                areaCodeList.appendChild(areaCodeElement);
+            }
+            loadedAreaCodes += count;
+        }
+
+        document.getElementById('sidebar').addEventListener('scroll', function() {
+            var sidebar = this;
+            if (sidebar.scrollTop + sidebar.clientHeight >= sidebar.scrollHeight) {
+                loadMoreAreaCodes(50);
+            }
+        });
     </script>
 </body>
 </html>
