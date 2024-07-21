@@ -3,145 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NFT FANS AREAS</title>
+    <title>Rectangle Wallet Mapping</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
         body {
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
-            background-color: #000;
-            color: #fff;
             overflow: hidden;
+            filter: invert(100%) hue-rotate(180deg); /* Inverts colors and adjusts hue to correct colors */
         }
 
         #map {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 80vw;
             height: 100vh;
-            overflow: hidden;
-            filter: invert(200%);
-            z-index: 0;
-        }
-
-        #sidebar {
-            position: fixed;
-            top: 0;
-            right: 0;
-            width: 20vw;
-            height: 100vh;
-            background-color: #111;
-            overflow-y: auto;
-            padding: 20px;
-            box-sizing: border-box;
-            z-index: 1000;
+            width: 100vw;
         }
 
         #search-container {
-            position: fixed;
-            top: 20px;
+            position: absolute;
+            top: 10px; /* Distance from the top */
             left: 50%;
-            transform: translateX(-50%);
-            background: #ffffff;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            transform: translateX(-50%); /* Center horizontally */
+            z-index: 1000;
             display: flex;
             align-items: center;
+            background: #fff; /* Ensure the background is white for visibility */
             padding: 10px;
-            z-index: 1000;
+            border: 1px solid #ccc;
+            border-radius: 5px;
         }
 
-        #search-input {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            outline: none;
-            font-size: 14px;
-            border-top-left-radius: 5px;
-            border-bottom-left-radius: 5px;
+        #search-box {
+            width: 200px; /* Adjust the width as needed */
+            margin-right: 10px;
+            padding: 5px;
+            background: #fff; /* Ensure the search box background is white for visibility */
+            color: #000; /* Ensure text color is black for visibility */
+            border: 1px solid #ccc;
+            border-radius: 3px;
         }
 
         #search-button {
-            padding: 10px 20px;
-            background-color: #333;
-            color: #fff;
-            border: none;
             cursor: pointer;
-            border-top-right-radius: 5px;
-            border-bottom-right-radius: 5px;
-            transition: background-color 0.3s, color 0.3s;
+            background: #007bff; /* Button background color */
+            color: #fff; /* Button text color */
+            border: none;
+            padding: 5px 10px; /* Smaller padding */
+            border-radius: 3px;
+            font-size: 14px; /* Smaller text size */
         }
 
         #search-button:hover {
-            background-color: #555;
+            background: #0056b3; /* Darker shade on hover */
         }
 
-        .blink {
-            animation: blink-animation 1s steps(5, start) infinite;
-            -webkit-animation: blink-animation 1s steps(5, start) infinite;
-        }
-
-        @keyframes blink-animation {
-            to { visibility: hidden; }
-        }
-
-        @-webkit-keyframes blink-animation {
-            to { visibility: hidden; }
-        }
-
-        /* Style for area code list in the sidebar */
-        .area-code {
+        .popup-content {
             display: flex;
-            align-items: center;
+            flex-direction: column;
+        }
+
+        .popup-content input,
+        .popup-content textarea {
             margin-bottom: 10px;
-            padding: 10px;
-            background-color: #222;
-            border-radius: 5px;
+            background: #fff; /* Ensure the input background is white for visibility */
+            color: #000; /* Ensure text color is black for visibility */
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+
+        .popup-content button {
             cursor: pointer;
-            transition: background-color 0.3s;
-            font-size: 10px;
+            background: #007bff; /* Button background color */
+            color: #fff; /* Button text color */
+            border: none;
+            padding: 5px;
+            border-radius: 3px;
         }
 
-        .area-code:hover {
-            background-color: #444;
-        }
-
-        .modified-area {
-            background-color: #880;
-        }
-
-        .usa-icon {
-            width: 16px;
-            height: 16px;
-            margin-right: 5px;
+        .popup-content button:hover {
+            background: #0056b3; /* Darker shade on hover */
         }
     </style>
 </head>
 <body>
-    <!-- Search container -->
     <div id="search-container">
-        <input type="text" id="search-input" placeholder="Search by areanft (e.g., abc123)">
+        <input type="text" id="search-box" placeholder="Enter wallet address" />
         <button id="search-button">Search</button>
     </div>
-    
-    <!-- Map container -->
     <div id="map"></div>
 
-    <!-- Sidebar for area code list -->
-    <div id="sidebar">
-        <h2 style="text-align: center; color: #fff;">NFT FANS Area Codes</h2>
-        <div id="area-code-list">
-            <!-- Area codes will be dynamically added here -->
-        </div>
-    </div>
-
-    <!-- JavaScript libraries and scripts -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://sdk.amazonaws.com/js/aws-sdk-2.140.0.min.js"></script>
     <script>
-        // Initialize AWS SDK with your credentials and region
         AWS.config.update({
             region: 'eu-north-1', // Replace with your AWS region
             credentials: new AWS.Credentials('AKIAVRUVVVUM65TIIUHH', 'ZkGMefa8j6JcqV7y3CF/5cNSP9hwKn7FoQrkEm3y')
@@ -157,13 +110,11 @@
         });
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            noWrap: true // Prevents horizontal tile wrapping
+            noWrap: true
         }).addTo(map);
 
-        var drawnRectangles = [];
-        var allAreaCodes = []; // Array to store all area codes
+        var drawnRectangles = []; // Array to hold rectangles with associated wallet addresses
 
-        // Function to fetch and display all rectangles from DynamoDB on page load
         function fetchAndDisplayRectangles() {
             var params = {
                 TableName: tableName
@@ -175,112 +126,125 @@
                     return;
                 }
 
-                console.log('Fetched items:', data.Items); // Log fetched items to console
+                console.log('Fetched items:', data.Items);
 
-                // Sort items by timestamp in descending order
-                data.Items.sort(function(a, b) {
-                    return new Date(b.timestamp) - new Date(a.timestamp);
+                // Clear the previously displayed rectangles
+                drawnRectangles.forEach(function(item) {
+                    map.removeLayer(item.rectangle);
                 });
+
+                drawnRectangles = []; // Reset the array
 
                 data.Items.forEach(function(item) {
-                    var boundsArray = item.bounds.split(',');
-                    var bounds = L.latLngBounds(
-                        [parseFloat(boundsArray[1]), parseFloat(boundsArray[0])],
-                        [parseFloat(boundsArray[3]), parseFloat(boundsArray[2])]
-                    );
-                    var color = item.color;
-                    var areanft = item.solfan;
+                    if (item.wallet) { // Only add rectangles with an attached wallet
+                        var boundsArray = item.bounds.split(',');
+                        var bounds = L.latLngBounds(
+                            [parseFloat(boundsArray[1]), parseFloat(boundsArray[0])],
+                            [parseFloat(boundsArray[3]), parseFloat(boundsArray[2])]
+                        );
+                        var wallet = item.wallet;
+                        var message = item.message || ''; // Retrieve the message if it exists
 
-                    // Create rectangle on map
-                    var rectangle = L.rectangle(bounds, { color: color, fillOpacity: 0.5 }).addTo(map);
-                    rectangle.bindPopup('Area Code: ' + areanft);
+                        var rectangle = L.rectangle(bounds, { color: '#ff7800', weight: 1, fillOpacity: 0.2 }).addTo(map);
+                        rectangle.bindPopup(`
+                            <b>Wallet Address:</b> ${wallet}<br>
+                            <b>Message:</b> ${message}
+                        `);
 
-                    // Add to drawnRectangles array
-                    drawnRectangles.push({ rectangle: rectangle, areanft: areanft });
-
-                    // Add area code to allAreaCodes array
-                    allAreaCodes.push({ areanft: areanft, bounds: bounds, timestamp: new Date(item.timestamp) });
+                        drawnRectangles.push({ rectangle: rectangle, wallet: wallet, message: message });
+                    }
                 });
-
-                // Load the first 50 area codes initially
-                loadMoreAreaCodes(50);
             });
         }
 
-        // Call the function to fetch and display rectangles from DynamoDB on page load
         window.onload = fetchAndDisplayRectangles;
 
-        map.on('click', function(e) {
-            var center = e.latlng;
+        var isDrawing = false;
+        var currentRectangle = null;
+        var currentBounds = null;
 
-            // Check if new rectangle overlaps with existing ones
-            var overlapping = drawnRectangles.some(function(rectangle) {
-                return rectangle.rectangle.getBounds().contains(center);
-            });
-
-            if (!overlapping) {
-                // Generate a random areanft (32 characters)
-                var areanft = generateRandomID();
-
-                // Calculate width and height for an area of approximately 500m²
-                var widthMeters = Math.sqrt(500);
-                var heightMeters = 500 / widthMeters;
-
-                // Convert meters to degrees (approximation)
-                var widthDegrees = widthMeters / (111320 * Math.cos(center.lat * Math.PI / 180));
-                var heightDegrees = heightMeters / 111320;
-
-                // Create bounds for the rectangle
-                var bounds = L.latLngBounds(
-                    [center.lat - heightDegrees / 2, center.lng - widthDegrees / 2],
-                    [center.lat + heightDegrees / 2, center.lng + widthDegrees / 2]
-                );
-
-                // Generate a random color for the rectangle
-                var color = '#' + Math.floor(Math.random() * 16777215).toString(16);
-
-                // Add the rectangle to the map
-                var rectangle = L.rectangle(bounds, { color: color, fillOpacity: 0.5 }).addTo(map);
-
-                // Add blinking effect
-                rectangle.getElement().classList.add('blink');
-
-                // Add popup with areanft information
-                rectangle.bindPopup('Area Code: ' + areanft);
-
-                // Add to the beginning of the list of drawn rectangles
-                drawnRectangles.unshift({ rectangle: rectangle, areanft: areanft });
-
-                // Save the area code to DynamoDB
-                saveAreaCodeToDynamoDB(areanft, bounds, color);
-
-                // Add the area code to the sidebar
-                addAreaCodeToSidebar(areanft, bounds, new Date());
-
-                // Fit map to bounds of the new rectangle
-                map.fitBounds(bounds);
-            } else {
-                alert('The new rectangle overlaps with an existing one. Please choose another location.');
-            }
-        });
-
-        function generateRandomID() {
-            var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            var length = 32;
-            var randomID = '';
-            for (var i = 0; i < length; i++) {
-                randomID += characters.charAt(Math.floor(Math.random() * characters.length));
-            }
-            return randomID;
+        // Get the current map bounds
+        function updateMapBounds() {
+            return map.getBounds();
         }
 
-        function saveAreaCodeToDynamoDB(areanft, bounds, color) {
+        map.on('click', function(e) {
+            if (isDrawing) {
+                return;
+            }
+
+            var mapBounds = updateMapBounds();
+            var latlng = e.latlng;
+            var size = 0.009; // Roughly equivalent to 1 km, adjusted for latitude
+
+            // Define the potential rectangle bounds
+            var potentialBounds = L.latLngBounds(
+                [latlng.lat - size / 2, latlng.lng - size / 2],
+                [latlng.lat + size / 2, latlng.lng + size / 2]
+            );
+
+            // Check if the potential rectangle is within the map bounds
+            if (!mapBounds.contains(potentialBounds)) {
+                alert('The rectangle extends outside the map boundaries.');
+                return;
+            }
+
+            currentBounds = potentialBounds;
+
+            currentRectangle = L.rectangle(currentBounds, { color: '#ff7800', weight: 1, fillOpacity: 0.2 }).addTo(map);
+
+            isDrawing = true;
+
+            currentRectangle.on('click', function() {
+                var popupContent = document.createElement('div');
+                popupContent.className = 'popup-content';
+                popupContent.innerHTML = `
+                    <input type="text" id="wallet-input" placeholder="Enter wallet address" />
+                    <textarea id="message-input" placeholder="Enter your message"></textarea>
+                    <button id="wallet-submit">Submit</button>
+                `;
+                var popup = L.popup()
+                    .setLatLng(e.latlng)
+                    .setContent(popupContent)
+                    .openOn(map);
+
+                document.getElementById('wallet-submit').addEventListener('click', function() {
+                    var walletAddress = document.getElementById('wallet-input').value.trim();
+                    var message = document.getElementById('message-input').value.trim();
+                    if (walletAddress) {
+                        var solfanKey = walletAddress + new Date().getTime(); // Generate a unique key
+                        saveRectangleToDynamoDB(solfanKey, walletAddress, message, currentBounds);
+
+                        currentRectangle.setStyle({ color: '#00ff00', weight: 2, fillOpacity: 0.5 });
+                        currentRectangle.bindPopup(`
+                            <b>Wallet Address:</b> ${walletAddress}<br>
+                            <b>Message:</b> ${message}
+                        `).openPopup();
+
+                        drawnRectangles.push({ rectangle: currentRectangle, wallet: walletAddress, message: message });
+
+                        map.fitBounds(currentRectangle.getBounds()); // Zoom to the new rectangle
+
+                        isDrawing = false;
+                        currentRectangle = null;
+                        currentBounds = null;
+
+                        map.closePopup();
+                    } else {
+                        alert('Please enter a valid wallet address.');
+                    }
+                });
+            });
+        });
+
+        function saveRectangleToDynamoDB(solfanKey, wallet, message, bounds) {
             var params = {
                 TableName: tableName,
                 Item: {
-                    solfan: areanft,
+                    solfan: solfanKey, // Include the primary key attribute
+                    wallet: wallet,
+                    message: message,
                     bounds: bounds.toBBoxString(),
-                    color: color,
                     timestamp: new Date().toISOString()
                 }
             };
@@ -289,142 +253,41 @@
 
             dynamoDB.put(params, function(err, data) {
                 if (err) {
-                    console.error('Error saving areanft to DynamoDB:', err);
-                    alert('Error saving areanft to DynamoDB: ' + err.message);
+                    console.error('Error saving rectangle to DynamoDB:', err);
+                    alert('Error saving rectangle to DynamoDB: ' + err.message);
                 } else {
-                    console.log('Successfully saved areanft to DynamoDB:', areanft);
+                    console.log('Successfully saved rectangle to DynamoDB:', wallet);
                 }
             });
+        }
+
+        function searchRectangleByWallet(wallet) {
+            var boundsArray = [];
+            drawnRectangles.forEach(function(item) {
+                if (item.wallet === wallet) {
+                    item.rectangle.setStyle({ color: '#00ff00', weight: 2, fillOpacity: 0.5 });
+                    item.rectangle.openPopup();
+                    boundsArray.push(item.rectangle.getBounds());
+                } else {
+                    item.rectangle.setStyle({ color: '#ff7800', weight: 1, fillOpacity: 0.2 });
+                }
+            });
+
+            if (boundsArray.length > 0) {
+                var bounds = L.latLngBounds(boundsArray.flat());
+                map.fitBounds(bounds);
+            } else {
+                alert('No rectangles found for wallet address: ' + wallet);
+            }
         }
 
         document.getElementById('search-button').addEventListener('click', function() {
-            var searchValue = document.getElementById('search-input').value.trim();
-            if (searchValue) {
-                searchRectangle(searchValue);
-            }
-        });
-
-        function searchRectangle(areanft) {
-            var searchedRectangle = drawnRectangles.find(function(rectangle) {
-                return rectangle.areanft === areanft;
-            });
-
-            if (searchedRectangle) {
-                map.fitBounds(searchedRectangle.rectangle.getBounds());
-                searchedRectangle.rectangle.openPopup();
-            } else {
-                retrieveAreaCodeFromDynamoDB(areanft);
-            }
-        }
-
-        function retrieveAreaCodeFromDynamoDB(areanft) {
-            var params = {
-                TableName: tableName,
-                Key: {
-                    solfan: areanft
-                }
-            };
-
-            dynamoDB.get(params, function(err, data) {
-                if (err) {
-                    console.error('Error retrieving data from DynamoDB:', err);
-                    alert('Error retrieving rectangle with the specified areanft: ' + err.message);
-                } else {
-                    console.log('Retrieved data from DynamoDB:', data);
-
-                    if (data.Item) {
-                        var boundsArray = data.Item.bounds.split(',');
-                        var bounds = L.latLngBounds(
-                            [parseFloat(boundsArray[1]), parseFloat(boundsArray[0])],
-                            [parseFloat(boundsArray[3]), parseFloat(boundsArray[2])]
-                        );
-                        var color = data.Item.color;
-                        var rectangle = L.rectangle(bounds, { color: color, fillOpacity: 0.5 }).addTo(map);
-                        rectangle.bindPopup('Area Code: ' + areanft);
-                        drawnRectangles.push({ rectangle: rectangle, areanft: areanft });
-                        map.fitBounds(bounds);
-                        rectangle.openPopup();
-                        addAreaCodeToSidebar(areanft, bounds, new Date(data.Item.timestamp));
-                    } else {
-                        alert('Rectangle with the specified areanft not found.');
-                    }
-                }
-            });
-        }
-
-        function addAreaCodeToSidebar(areanft, bounds, timestamp) {
-            var areaCodeList = document.getElementById('area-code-list');
-            var areaCodeElement = document.createElement('div');
-            areaCodeElement.textContent = areanft;
-            areaCodeElement.classList.add('area-code');
-
-            if (areanft === '5i4hXOAVzqUBScsSngBTpRWnLjZI6UAO') {
-                areaCodeElement.classList.add('modified-area');
-            }
-
-            if (isRectangleInUSA(bounds)) {
-                var usaIcon = document.createElement('img');
-                usaIcon.src = 'https://i.ibb.co/fXRX4Xx/united-states-1.png';
-                usaIcon.classList.add('usa-icon');
-                areaCodeElement.insertBefore(usaIcon, areaCodeElement.firstChild);
-            }
-
-            areaCodeElement.addEventListener('click', function() {
-                searchRectangle(areanft); // Use 'areanft' from the outer scope
-            });
-
-            areaCodeElement.setAttribute('data-timestamp', timestamp.toISOString());
-            areaCodeList.insertBefore(areaCodeElement, areaCodeList.firstChild);
-        }
-
-        function isRectangleInUSA(bounds) {
-            var usaBounds = L.latLngBounds(
-                [24.396308, -125.0],
-                [49.384358, -66.93457]
-            );
-            return usaBounds.intersects(bounds);
-        }
-
-        var loadedAreaCodes = 0;
-
-        function loadMoreAreaCodes(count) {
-            var areaCodeList = document.getElementById('area-code-list');
-            for (var i = loadedAreaCodes; i < loadedAreaCodes + count && i < allAreaCodes.length; i++) {
-                var areaCode = allAreaCodes[i];
-                var areaCodeElement = document.createElement('div');
-                areaCodeElement.textContent = areaCode.areanft;
-                areaCodeElement.classList.add('area-code');
-
-                if (areaCode.areanft === '5i4hXOAVzqUBScsSngBTpRWnLjZI6UAO') {
-                    areaCodeElement.classList.add('modified-area');
-                }
-
-                if (isRectangleInUSA(areaCode.bounds)) {
-                    var usaIcon = document.createElement('img');
-                    usaIcon.src = 'https://i.ibb.co/fXRX4Xx/united-states-1.png';
-                    usaIcon.classList.add('usa-icon');
-                    areaCodeElement.insertBefore(usaIcon, areaCodeElement.firstChild);
-                }
-
-                // Add event listener to the area code element
-                (function(areanft) {
-                    areaCodeElement.addEventListener('click', function() {
-                        searchRectangle(areanft);
-                    });
-                })(areaCode.areanft); // Immediately invoke the function with 'areaCode.areanft'
-
-                areaCodeElement.setAttribute('data-timestamp', areaCode.timestamp.toISOString());
-                areaCodeList.appendChild(areaCodeElement);
-            }
-            loadedAreaCodes += count;
-        }
-
-        document.getElementById('sidebar').addEventListener('scroll', function() {
-            var sidebar = this;
-            if (sidebar.scrollTop + sidebar.clientHeight >= sidebar.scrollHeight) {
-                loadMoreAreaCodes(50);
+            var searchTerm = document.getElementById('search-box').value.trim();
+            if (searchTerm) {
+                searchRectangleByWallet(searchTerm);
             }
         });
     </script>
 </body>
 </html>
+
