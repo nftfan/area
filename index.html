@@ -163,14 +163,23 @@
         var currentRectangle = null;
         var currentBounds = null;
 
-        // Get the current map bounds
-        function updateMapBounds() {
-            return map.getBounds();
+        // Maximum allowed size of the rectangle in meters (1 km²)
+        var maxRectangleSizeMeters = 1000; // 1 km²
+
+        // Convert size in meters to latitude/longitude degrees
+        function metersToDegrees(meters) {
+            var earthCircumference = 40008000; // in meters
+            var degrees = (meters / earthCircumference) * 360;
+            return degrees;
         }
 
-        // Adjust the rectangle size based on zoom level
-        function getSizeForZoom(zoom) {
-            return Math.pow(2, 20 - zoom) * 0.005; // Adjust size based on zoom level
+        // Get the maximum size of the rectangle in degrees
+        function getMaxRectangleSizeDegrees() {
+            return metersToDegrees(maxRectangleSizeMeters);
+        }
+
+        function updateMapBounds() {
+            return map.getBounds();
         }
 
         map.on('click', function(e) {
@@ -180,7 +189,7 @@
 
             var mapBounds = updateMapBounds();
             var latlng = e.latlng;
-            var size = getSizeForZoom(map.getZoom()); // Get size based on current zoom level
+            var size = getMaxRectangleSizeDegrees(); // Get size in degrees
 
             // Define the potential rectangle bounds
             var potentialBounds = L.latLngBounds(
@@ -306,5 +315,6 @@
     </script>
 </body>
 </html>
+
 
 
